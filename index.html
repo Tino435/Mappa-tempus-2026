@@ -103,7 +103,7 @@
 
 <div class="map-viewport">
     <div id="panzoom-element">
-        <img src="mappa.jpg" usemap="#festa-map" id="map-image">
+        <img src="Cartografia_TEMPUS.jgp" usemap="#festa-map" id="map-image">
         <map name="festa-map">
             </map>
     </div>
@@ -140,8 +140,18 @@
 
     // 2. Gestione Menu Hamburger
     function toggleMenu() {
-        document.getElementById('sidebarMenu').classList.toggle('active');
+    const sidebar = document.getElementById('sidebarMenu');
+    const hamburger = document.querySelector('.hamburger');
+    
+    sidebar.classList.toggle('active');
+    
+    // Se il menu è attivo, sposta il pulsante a destra (es. di 290px)
+    if (sidebar.classList.contains('active')) {
+        hamburger.style.left = '290px'; 
+    } else {
+        hamburger.style.left = '15px';
     }
+}
 
     // 3. Funzione Popup
     function showInfo(title, text) {
@@ -166,4 +176,5 @@
 </script>
 
 </body>
+
 </html>
