@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Mappa Interattiva - Tempus 2026</title>
+    
+    <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/image-map-resizer/1.0.10/js/imageMapResizer.min.js"></script>
+
+    <style>
+        :root { --medieval-blue: #2c3e50; --gold: #f1c40f; --parchment: #e0d7c6; }
+        body { margin: 0; display: flex; height: 100vh; font-family: 'Georgia', serif; background: var(--parchment); overflow: hidden; }
+
+        /* --- 1. STILE LEGENDA (SIDEBAR) --- */
+        .sidebar { width: 320px; background: var(--medieval-blue); color: white; padding: 20px; overflow-y: auto; z-index: 999; box-shadow: 2px 0 15px rgba(0,0,0,0.5); flex-shrink: 0; transition: transform 0.3s ease; }
+        .sidebar h2 { font-size: 1.2rem; border-bottom: 2px solid var(--gold); padding-bottom: 10px; color: var(--gold); text-transform: uppercase; margin-top: 0; }
+        .legend-list { padding: 0; list-style: none; margin: 0; }
+        .legend-item { cursor: pointer; padding: 10px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; transition: 0.2s; }
+        .legend-item:hover { color: var(--gold); padding-left: 8px; }
+
+        /* --- 2. STILE ICONE CLICCABILI (MAPPA) --- */
+        .map-viewport { flex-grow: 1; position: relative; overflow: hidden; background: #ccd5de; cursor: grab; display: flex; justify-content: center; align-items: center; touch-action: none; }
+        .map-point { position: absolute; width: 44px; height: 44px; background: rgba(255, 255, 255, 0); border-radius: 50%; cursor: pointer; transform: translate(-50%, -50%); z-index: 10; }
+        .panzoom-element {display : inline-block; position : relative;}
+        .panzoom-element img { max-width: 100%; max-height: 100%; height: auto; width: auto; display: block; }
+
+        /* Mobile adjustments */
+        .hamburger { display: none; position: fixed; top: 15px; left: 15px; z-index: 1000; background: var(--medieval-blue); border: 2px solid var(--gold); border-radius: 5px; padding: 8px 10px; cursor: pointer; flex-direction: column; gap: 4px; transition: left 0.3s ease; }
+        .hamburger span { display: block; width: 22px; height: 3px; background: var(--gold); }
+        @media (max-width: 768px) { .hamburger { display: flex; } .sidebar { position: fixed; left: 0; top: 0; height: 100vh; transform: translateX(-100%); width: 280px; } .sidebar.active { transform: translateX(0); } .sidebar h2 { margin-top: 60px; } .map-viewport { width: 100vw; height: 100vh; } }
+
+        /* Popup */
+        .modal { display: none; position: fixed; z-index: 1001; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.8); }
+        .modal-content { background: #fdfaf0; margin: 20% auto; padding: 25px; width: 80%; max-width: 400px; border-radius: 8px; text-align: center; border: 4px solid var(--medieval-blue); position: relative; }
+        .close { position: absolute; right: 15px; top: 5px; font-size: 35px; cursor: pointer; color: var(--medieval-blue); }
+    </style>
+</head>
+<body>
+
+<button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+
+<div class="sidebar" id="sidebarMenu">
+    <h2>I Luoghi della Festa</h2>
+    
+    <h3>Locande e Ristori</h3>
+    <ul class="legend-list">
+        <li class="legend-item" onclick="showInfo('Antro et Locanda de lo Duomo', '1️⃣ Ristoro medievale situato sotto le volte del Duomo. Specialità della tradizione.')">1️⃣ Antro et Locanda de lo Duomo</li>
+        <li class="legend-item" onclick="showInfo('Cort dal Diaul', '2️⃣ Suggestivo punto di ristoro incastonato tra le mura storiche.')">2️⃣ Cort dal Diaul</li>
+        <li class="legend-item" onclick="showInfo('Cervogeria de lo Eretico', '3️⃣ Produzione artigianale di birre ed elisir medievali.')">3️⃣ Cervogeria de lo Eretico</li>
+        <li class="legend-item" onclick="showInfo('Taberna de lo Rospo', '4️⃣ Osteria tipica per viandanti e avventori.')">4️⃣ Taberna de lo Rospo</li>
+        <li class="legend-item" onclick="showInfo('Porta Paninorum', '5️⃣ Antico varco del borgo, oggi sede di sapori tradizionali.')">5️⃣ Porta Paninorum</li>
+        <li class="legend-item" onclick="showInfo('Taberna Pane et Salamen', '6️⃣ Specialità locali, affettati e sapori del territorio.')">6️⃣ Taberna Pane et Salamen</li>
+    </ul>
+
+    <h3>Eventi e Spettacoli</h3>
+    <ul class="legend-list">
+        <li class="legend-item" onclick="showInfo('Incendio del Campanile', '⭐ Grande spettacolo pirotecnico serale che illumina il cielo del borgo.')">⭐ Incendio del Campanile</li>
+        <li class="legend-item" onclick="showInfo('Palio del Niederlech', '🏁 Venerdì 1: La storica sfida delle contrade per il primato.')">🏁 Palio del Niederlech</li>
+        <li class="legend-item" onclick="showInfo('Dama Vivente', '♟️ Lunedì 4: La suggestiva sfida a Dama Vivente in Piazza del Ferro.')">♟️ Dama Vivente</li>
+        <li class="legend-item" onclick="showInfo('Antro delle Torture', '⛓️ Esposizione storica di strumenti di giustizia medievale.')">⛓️ Antro delle Torture</li>
+        <li class="legend-item" onclick="showInfo('Accampamento Medievale', '⛺ Vita quotidiana, tende, armigeri e mestieri d\'altri tempi.')">⛺ Accampamento</li>
+        <li class="legend-item" onclick="showInfo('Salita delle Cartomanti', '🌙 Scopri il tuo destino tra stelle, tarocchi e mistero.')">🌙 Salita delle Cartomanti</li>
+        <li class="legend-item" onclick="showInfo('Mercati Medievali', '🧺 Banchi di artigianato artistico e mercanzie d\'epoca lungo le vie.')">🧺 Mercati</li>
+    </ul>
+
+    <h3>Servizi e Utilità</h3>
+    <ul class="legend-list">
+        <li class="legend-item" onclick="showInfo('Cambio Monete', '💰 Cambia qui i tuoi Euro nella moneta ufficiale della festa.')">💰 Cambio Monete</li>
+        <li class="legend-item" onclick="showInfo('Infopoint / WC / Nursery', 'ℹ️ Informazioni generali, programmi e servizi igienici con fasciatoio.')">ℹ️ Infopoint / WC / Nursery</li>
+        <li class="legend-item" onclick="showInfo('Salvacondotto', '⚔️ Punto di controllo e accoglienza per i visitatori.')">⚔️ Salvacondotto</li>
+        <li class="legend-item" onclick="showInfo('Cortile dei Nobili', '👑 Area riservata e incontri dell\'aristocrazia del borgo.')">👑 Cortile dei Nobili</li>
+    </ul>
+</div>
+
+<div class="map-viewport">
+    <div id="panzoom-element">
+        <div style="position: relative; display: inline-block;">
+            <img src="FRONTE.png" id="map-image">
+
+            <div class="map-point" style="top: 36.5%; left: 68%;" title="Locanda Duomo" onclick="showInfo('Antro et Locanda de lo Duomo', '1️⃣ Situata sotto le volte del Duomo.')"></div>
+            <div class="map-point" style="top: 43%; left: 44%;" title="Cort dal Diaul" onclick="showInfo('Cort dal Diaul', '2️⃣ Ristoro suggestivo tra le mura storiche.')"></div>
+            <div class="map-point" style="top: 52%; left: 54%;" title="Cervogeria" onclick="showInfo('Cervogeria de lo Eretico', '3️⃣ Birre artigianali in Vicolo del Bretone.')"></div>
+            <div class="map-point" style="top: 59%; left: 64.5%;" title="Taberna Rospo" onclick="showInfo('Taberna de lo Rospo', '4️⃣ Osteria tipica per viandanti.')"></div>
+            <div class="map-point" style="top: 28.5%; left: 29%;" title="Porta Paninorum" onclick="showInfo('Porta Paninorum', '5️⃣ Sapori tradizionali lungo Via dei Conti.')"></div>
+            <div class="map-point" style="top: 38%; left: 20.5%;" title="Pane et Salamen" onclick="showInfo('Taberna Pane et Salamen', '6️⃣ Specialità locali in Via Bini.')"></div>
+            <div class="map-point" style="top: 31.5%; left: 71.75%;" title="Incendio" onclick="showInfo('Incendio del Campanile', '⭐ Spettacolo pirotecnico al Duomo.')"></div>
+            <div class="map-point" style="top: 78%; left: 14%;" title="Palio" onclick="showInfo('Palio / Dama Vivente', '🏁 Piazza del Ferro: Palio e Dama Vivente.')"></div>
+            <div class="map-point" style="top: 36%; left: 33%;" title="Infopoint" onclick="showInfo('Infopoint', 'ℹ️ Informazioni e WC con fasciatoio.')"></div>
+            <div class="map-point" style="top: 51.5%; left: 28.5%;" title="Accampamento" onclick="showInfo('Accampamento', '⛺ Tende e addestramento armigeri.')"></div>
+            <div class="map-point" style="top: 48%; left: 35.5%;" title="Cartomanti" onclick="showInfo('Salita delle Cartomanti', '🌙 Scopri il tuo destino tra stelle e tarocchi.')"></div>
+
+            <div class="map-point" style="top: 37.5%; left: 76%;" title="Mercati" onclick="showInfo('Mercati Medievali', '🧺 Artigianato e mercanzie d\'epoca.')"></div>
+            <div class="map-point" style="top: 32%; left: 64%;" title="Mercati" onclick="showInfo('Mercati Medievali', '🧺 Artigianato e mercanzie d\'epoca.')"></div>
+            <div class="map-point" style="top: 38%; left: 42.75%;" title="Mercati" onclick="showInfo('Mercati Medievali', '🧺 Artigianato e mercanzie d\'epoca.')"></div>
+            <div class="map-point" style="top: 35%; left: 56.75%;" title="Mercati" onclick="showInfo('Mercati Medievali', '🧺 Artigianato e mercanzie d\'epoca.')"></div>
+
+            <div class="map-point" style="top: 42.5%; left: 37.5%;" title="Antro delle Torture" onclick="showInfo('Antro delle Torture', '⛓️ Esposizione di strumenti di giustizia medievale.')"></div>
+            <div class="map-point" style="top: 45%; left: 71%;" title="Cortile dei Nobili" onclick="showInfo('Cortile dei Nobili', '👑 Area riservata e incontri dell\'aristocrazia del borgo.')"></div>
+            <div class="map-point" style="top: 36%; left: 23.75%;" title="Salvacondotto" onclick="showInfo('Salvacondotto', '⚔️ Punto di controllo e accoglienza per i visitatori.')"></div>
+            <div class="map-point" style="top: 31%; left: 86%;" title="Salvacondotto" onclick="showInfo('Salvacondotto', '⚔️ Punto di controllo e accoglienza per i visitatori.')"></div>
+            <div class="map-point" style="top: 36%; left: 36%;" title="Cambio monete" onclick="showInfo('Cambio monete', '💰 Cambio valuta e servizi bancari.')"></div>
+
+        </div>
+    </div>
+</div>
+
+<div id="infoModal" class="modal">
+    <div class="modal-content">
+        <span class="close" onclick="closeModal()">&times;</span>
+        <h2 id="modal-title" style="color:var(--medieval-blue); margin-top:0;"></h2>
+        <p id="modal-text" style="line-height:1.6; color:#333;"></p>
+    </div>
+</div>
+
+<script>
+    const elem = document.getElementById('panzoom-element');
+    const panzoom = Panzoom(elem, {maxScale: 4, minScale: 0.5, contain: 'outside', startScale: 0.7, setTransform: 'both' });
+    elem.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
+
+    function centerMap() {
+        panzoom.pan(0, 0);
+    }
+
+    const mapImage = document.getElementById('map-image');
+
+    function stabilizeMap() {
+        panzoom.zoom(0.7, {animate: false});
+        panzoom.pan(0, 0, {animate: false});
+        imageMapResize();
+    }
+    if (mapImage.complete) {
+        stabilizeMap();
+    } else {
+        mapImage.addEventListener('load', stabilizeMap);
+    }
+    
+    function toggleMenu() {
+        const sidebar = document.getElementById('sidebarMenu');
+        const hamburger = document.querySelector('.hamburger');
+        sidebar.classList.toggle('active');
+        hamburger.style.left = sidebar.classList.contains('active') ? '230px' : '15px';
+    }
+
+    function showInfo(title, text) {
+        document.getElementById('modal-title').innerText = title;
+        document.getElementById('modal-text').innerText = text;
+        document.getElementById('infoModal').style.display = "block";
+        if (window.innerWidth <= 768) document.getElementById('sidebarMenu').classList.remove('active');
+    }
+
+    function closeModal() { document.getElementById('infoModal').style.display = "none"; }
+    window.onclick = function(event) { if (event.target == document.getElementById('infoModal')) closeModal(); }
+</script>
+
+</body>
+</html>
