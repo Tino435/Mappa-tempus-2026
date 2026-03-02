@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="it">
+	<head>
+		<meta charset="UTF-8">
+		<meta name="viewport" content="width=device-width, initial-scale=1.0">
+		<title>Mappa Interattiva - Tempus 2026</title>
+		
+		<script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+
+		<style>
+			:root { --medieval-blue: #2c3e50; --gold: #f1c40f; --parchment: #e0d7c6; }
+			
+			* { box-sizing: border-box; }
+
+			body { 
+				margin: 0; 
+				display: flex; 
+				height: 100vh; 
+				font-family: 'Georgia', serif; 
+				background: var(--parchment); 
+				overflow: hidden; 
+				touch-action: none; /* Necessario per Panzoom */
+			}
+
+			/* --- SIDEBAR --- */
+			.sidebar { 
+				width: 320px; 
+				background: var(--medieval-blue); 
+				color: white; 
+				padding: 20px; 
+				overflow-y: auto; 
+				z-index: 1001; 
+				box-shadow: 2px 0 15px rgba(0,0,0,0.5); 
+				flex-shrink: 0; 
+				transition: transform 0.3s ease; 
+			}
+			
+			.sidebar h2 { font-size: 1.2rem; border-bottom: 2px solid var(--gold); padding-bottom: 10px; color: var(--gold); text-transform: uppercase; margin-top: 40px; }
+			.legend-list { padding: 0; list-style: none; margin: 0; }
+			.legend-item { cursor: pointer; padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,0.1); font-size: 0.9rem; transition: 0.2s; }
+			.legend-item:hover { color: var(--gold); }
+
+			/* --- VIEWPORT MAPPA --- */
+			.map-viewport {
+				flex-grow: 1;
+				position: relative;
+				overflow: hidden;
+				background: #222;
+				display: flex;
+				justify-content: center;
+				align-items: center;
+			}
+
+			#panzoom-element {
+				display: inline-block;
+				position: relative;
+				cursor: grab;
+			}
+
+			#panzoom-element img {
+				display: block;
+				height: 100vh; /* Su mobile l'altezza è fissa, la larghezza è proporzionale */
+				width: auto;
+				max-width: none;
+			}
+
+			/* --- PUNTI CLICCABILI --- */
+			.map-point {
+				position: absolute;
+				width: 35px;
+				height: 35px;
+				transform: translate(-50%, -50%);
+				z-index: 10; 
+				cursor: pointer;
+				background: rgba(255, 255, 255, 0.2); /* Leggero cerchio per debug, puoi metterlo a 0 */
+				border-radius: 50%;
+				border: 2px solid transparent;
+			}
+
+			/* --- MOBILE ADJUSTMENTS --- */
+			.hamburger { 
+				display: none; 
+				position: fixed; 
+				top: 15px; 
+				left: 15px; 
+				z-index: 1002; 
+				background: var(--medieval-blue); 
+				border: 2px solid var(--gold); 
+				border-radius: 5px; 
+				padding: 10px; 
+				cursor: pointer; 
+				flex-direction: column; 
+				gap: 4px; 
+			}
+			
+			.hamburger span { display: block; width: 25px; height: 3px; background: var(--gold); }
+
+			@media (max-width: 768px) {
+				.hamburger { display: flex; }
+				.sidebar { 
+					position: fixed; 
+					left: 0; 
+					top: 0; 
+					height: 100vh; 
+					transform: translateX(-100%); 
+					width: 80%; 
+				}
+				.sidebar.active { transform: translateX(0); }
+			}
+
+			/* --- MODAL --- */
+			.modal { display: none; position: fixed; z-index: 2000; left: 0; top: 0; width: 100%; height: 100%; background: rgba(0, 0, 0, 0.8); align-items: center; justify-content: center; }
+			.modal-content { background: #fdfaf0; padding: 25px; width: 85%; max-width: 400px; border-radius: 8px; text-align: center; border: 4px solid var(--medieval-blue); position: relative; margin: auto; }
+			.close { position: absolute; right: 15px; top: 5px; font-size: 35px; cursor: pointer; color: var(--medieval-blue); }
+		</style>
+	</head>
+	<body>
+
+		<button class="hamburger" onclick="toggleMenu()"><span></span><span></span><span></span></button>
+
+		<div class="sidebar" id="sidebarMenu">
+			<h2>I Luoghi della Festa</h2>
+			<ul class="legend-list">
+				<li class="legend-item" onclick="showInfo('Antro et Locanda de lo Duomo', '1️⃣ Ristoro medievale situato sotto le volte del Duomo.')">1️⃣ Antro et Locanda de lo Duomo</li>
+				<li class="legend-item" onclick="showInfo('Cort dal Diaul', '2️⃣ Suggestivo punto di ristoro incastonato tra le mura storiche.')">2️⃣ Cort dal Diaul</li>
+				<li class="legend-item" onclick="showInfo('Cervogeria de lo Eretico', '3️⃣ Produzione artigianale di birre ed elisir medievali.')">3️⃣ Cervogeria de lo Eretico</li>
+				<li class="legend-item" onclick="showInfo('Taberna de lo Rospo', '4️⃣ Osteria tipica per viandanti e avventori.')">4️⃣ Taberna de lo Rospo</li>
+				<li class="legend-item" onclick="showInfo('Porta Paninorum', '5️⃣ Antico varco del borgo, oggi sede di sapori tradizionali.')">5️⃣ Porta Paninorum</li>
+				<li class="legend-item" onclick="showInfo('Taberna Pane et Salamen', '6️⃣ Specialità locali, affettati e sapori del territorio.')">6️⃣ Taberna Pane et Salamen</li>
+			</ul>
+			<h3>Eventi</h3>
+			<ul class="legend-list">
+				<li class="legend-item" onclick="showInfo('Incendio del Campanile', '⭐ Grande spettacolo pirotecnico serale.')">⭐ Incendio del Campanile</li>
+				<li class="legend-item" onclick="showInfo('Palio del Niederlech', '🏁 Venerdì 1: La storica sfida delle contrade.')">🏁 Palio del Niederlech</li>
+			</ul>
+		</div>
+
+		<div class="map-viewport">
+			<div id="panzoom-element">
+				<img src="FRONTE.png" alt="Mappa Tempus">
+				<div class="map-point" style="top: 36.5%; left: 68%;" onclick="showInfo('Antro et Locanda de lo Duomo', '1️⃣ Situata sotto le volte del Duomo.')"></div>
+				<div class="map-point" style="top: 43%; left: 44%;" onclick="showInfo('Cort dal Diaul', '2️⃣ Ristoro suggestivo tra le mura storiche.')"></div>
+				<div class="map-point" style="top: 52%; left: 54%;" onclick="showInfo('Cervogeria de lo Eretico', '3️⃣ Birre artigianali in Vicolo del Bretone.')"></div>
+				<div class="map-point" style="top: 59%; left: 64.5%;" onclick="showInfo('Taberna de lo Rospo', '4️⃣ Osteria tipica per viandanti.')"></div>
+				<div class="map-point" style="top: 28.5%; left: 29%;" onclick="showInfo('Porta Paninorum', '5️⃣ Sapori tradizionali lungo Via dei Conti.')"></div>
+				<div class="map-point" style="top: 38%; left: 20.5%;" onclick="showInfo('Taberna Pane et Salamen', '6️⃣ Specialità locali in Via Bini.')"></div>
+				<div class="map-point" style="top: 31.5%; left: 71.75%;" onclick="showInfo('Incendio del Campanile', '⭐ Spettacolo pirotecnico al Duomo.')"></div>
+				<div class="map-point" style="top: 78%; left: 14%;" onclick="showInfo('Palio / Dama Vivente', '🏁 Piazza del Ferro: Palio e Dama Vivente.')"></div>
+				<div class="map-point" style="top: 36%; left: 33%;" onclick="showInfo('Infopoint', 'ℹ️ Informazioni e WC con fasciatoio.')"></div>
+				<div class="map-point" style="top: 51.5%; left: 28.5%;" onclick="showInfo('Accampamento', '⛺ Tende e addestramento armigeri.')"></div>
+				<div class="map-point" style="top: 48%; left: 35.5%;" onclick="showInfo('Salita delle Cartomanti', '🌙 Scopri il tuo destino.')"></div>
+			</div>
+		</div>
+
+		<div id="infoModal" class="modal">
+			<div class="modal-content">
+				<span class="close" onclick="closeModal()">&times;</span>
+				<h2 id="modal-title" style="color:var(--medieval-blue); margin-top:0;"></h2>
+				<p id="modal-text" style="line-height:1.6; color:#333;"></p>
+			</div>
+		</div>
+
+		<script>
+			const elem = document.getElementById('panzoom-element');
+			
+			// Inizializzazione Panzoom ottimizzata per Mobile
+			const panzoom = Panzoom(elem, {
+				maxScale: 4,
+				minScale: 1,
+				contain: 'outside',
+				startScale: 1.2, // Un leggero zoom iniziale aiuta a capire che è muovibile
+			});
+
+			// Abilita lo zoom con la rotellina del mouse (opzionale)
+			elem.parentElement.addEventListener('wheel', panzoom.zoomWithWheel);
+
+			function toggleMenu() {
+				const sidebar = document.getElementById('sidebarMenu');
+				sidebar.classList.toggle('active');
+			}
+
+			function showInfo(title, text) {
+				document.getElementById('modal-title').innerText = title;
+				document.getElementById('modal-text').innerText = text;
+				document.getElementById('infoModal').style.display = "flex";
+				
+				// Chiudi sidebar su mobile dopo il click
+				if (window.innerWidth <= 768) {
+					document.getElementById('sidebarMenu').classList.remove('active');
+				}
+			}
+
+			function closeModal() { 
+				document.getElementById('infoModal').style.display = "none"; 
+			}
+
+			window.onclick = function(event) { 
+				if (event.target == document.getElementById('infoModal')) closeModal(); 
+			}
+		</script>
+
+	</body>
+</html>
