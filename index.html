@@ -1,0 +1,1277 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, user-scalable=no"
+    />
+    <title>Mappa Interattiva - Tempus 2026</title>
+
+    <script src="https://unpkg.com/@panzoom/panzoom@4.5.1/dist/panzoom.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/image-map-resizer/1.0.10/js/imageMapResizer.min.js"></script>
+
+    <link
+      href="https://fonts.googleapis.com/css2?family=IM+Fell+English+SC&display=swap"
+      rel="stylesheet"
+    />
+
+    <style>
+      :root {
+        --medieval-blue: #2c3e50;
+        --gold: #f1c40f;
+        --parchment: #e0d7c6;
+      }
+
+      body {
+        margin: 0;
+        padding: 0;
+        height: 100vh;
+        width: 100vw;
+        font-family: "IM Fell English SC", serif;
+        background: #ccd5de;
+        overflow: hidden;
+        position: fixed;
+      }
+
+      .map-viewport {
+        width: 100vw;
+        height: 100vh;
+        overflow: hidden;
+        position: relative;
+        justify-content: center;
+      }
+
+      #panzoom-element {
+        display: inline-block;
+        cursor: grab;
+        height: 1080px;
+        width: 1920px;
+      }
+
+      #map-image {
+        display: block;
+        height: 1080px;
+        width: 1920px;
+        pointer-events: none;
+        max-width: none !important;
+      }
+
+      .map-controls {
+        position: fixed;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 9999;
+        display: none;
+        gap: 10px;
+      }
+
+      .map-controls button {
+        background: var(--gold);
+        color: var(--medieval-blue);
+        border: 2px solid var(--medieval-blue);
+        padding: 8px 15px;
+        border-radius: 20px;
+        font-weight: bold;
+        font-family: "IM Fell English SC", serif;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        cursor: pointer;
+      }
+
+      .map-point {
+        position: absolute;
+        width: 50px;
+        height: 50px;
+        transform: translate(-50%, -50%);
+        z-index: 9999;
+        cursor: pointer;
+        background: rgba(255, 0, 0, 0);
+        pointer-events: auto;
+      }
+
+      #map-selector {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100vw;
+        height: 100vh;
+        z-index: 5000;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transition: opacity 0.5s ease;
+        background: rgba(0, 0, 0, 0.6);
+        box-sizing: border-box;
+      }
+
+      /* --- BOTTOM SHEET (Ex Sidebar) --- */
+      .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        width: 100%;
+        height: 70vh; /* Copre il 70% dello schermo quando aperto */
+        background: var(--medieval-blue);
+        color: white;
+        padding: 20px;
+        box-sizing: border-box;
+        overflow-y: auto;
+        z-index: 2000;
+        box-shadow: 0 -5px 20px rgba(0, 0, 0, 0.5);
+        border-radius: 20px 20px 0 0; /* Angoli arrotondati in alto */
+        transform: translateY(100%); /* Nascosto inizialmente */
+        transition: transform 0.4s cubic-bezier(0.33, 1, 0.68, 1);
+      }
+
+      .sidebar.active {
+        transform: translateY(0); /* Sale su */
+      }
+
+      /* "Maniglia" visiva per il Bottom Sheet */
+      .sidebar::before {
+        content: "";
+        width: 40px;
+        height: 5px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 10px;
+        position: absolute;
+        top: 10px;
+        left: 50%;
+        transform: translateX(-50%);
+      }
+
+      .sidebar h2 {
+        font-size: 1.2rem;
+        border-bottom: 2px solid var(--gold);
+        padding-bottom: 10px;
+        color: var(--gold);
+        text-transform: uppercase;
+        margin-top: 10px;
+      }
+
+      .legend-list {
+        padding: 0;
+        list-style: none;
+        margin: 0 0 20px 0;
+      }
+
+      .legend-item {
+        cursor: pointer;
+        padding: 15px 0;
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        font-size: 1rem;
+      }
+
+      /* Hamburger (Pulsante per aprire la lista) */
+      .hamburger {
+        display: flex;
+        position: fixed;
+        bottom: 30px;
+        right: 20px;
+        z-index: 1500;
+        background: var(--gold);
+        border: none;
+        border-radius: 50%;
+        width: 60px;
+        height: 60px;
+        box-shadow: 0 4px 10px rgba(0, 0, 0, 0.3);
+        justify-content: center;
+        align-items: center;
+        flex-direction: column;
+        gap: 4px;
+      }
+      .hamburger span {
+        display: block;
+        width: 25px;
+        height: 3px;
+        background: var(--medieval-blue);
+      }
+
+      /* Popup (Modal) adattato per Mobile */
+      .modal {
+        display: none; /* Nascosto di default */
+        position: fixed;
+        z-index: 9999; /* Sopra la sidebar e la mappa */
+        left: 0;
+        top: 0;
+        width: 100vw;
+        height: 100vh;
+        background-color: rgba(0, 0, 0, 0.7); /* Sfondo semi-trasparente */
+        backdrop-filter: blur(3px); /* Effetto sfocato opzionale */
+      }
+
+      /* Il contenuto effettivo del popup */
+      .modal-content {
+        background-color: #fdfaf0;
+        padding: 25px;
+        border-radius: 15px;
+        width: 85%;
+        max-width: 400px;
+        box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+
+        /* 🪄 LA MAGIA: ADATTIVO E CENTRATO */
+        height: auto !important; /* Si stringe come un abito attorno al testo */
+        max-height: 85vh !important; /* Se c'è tanto testo, si ferma all'85% dello schermo */
+
+        /* Posizionamento assoluto per centrarlo perfettamente (elimina spazi vuoti sopra e sotto) */
+        position: absolute !important;
+        top: 50% !important;
+        left: 50% !important;
+        transform: translate(-50%, -50%) !important;
+        margin: 0 !important;
+
+        display: flex;
+        flex-direction: column;
+      }
+
+      /* Pulsante di chiusura (X) */
+      .close {
+        color: #aaa;
+        float: right;
+        font-size: 28px;
+        font-weight: bold;
+        cursor: pointer;
+        line-height: 20px;
+        position: absolute;
+        top: 15px;
+        right: 15px;
+        z-index: 10;
+      }
+
+      .close:hover {
+        color: var(--medieval-blue);
+      }
+
+      .scroll-box {
+        height: auto !important; /* Non deve allungarsi da solo */
+        overflow-y: auto; /* Mette la barra solo se serve davvero */
+        margin-top: 15px;
+        padding-right: 5px;
+      }
+
+      .scroll-box::-webkit-scrollbar {
+        width: 6px;
+      }
+      .scroll-box::-webkit-scrollbar-track {
+        background: transparent;
+      }
+      .scroll-box::-webkit-scrollbar-thumb {
+        background: var(--gold);
+        border-radius: 10px;
+      }
+
+      .selector-overlay {
+        position: fixed;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        background: rgba(44, 62, 80, 0.95); /* Blu medievale opaco */
+        z-index: 5000; /* Sopra a ogni cosa */
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+        transition: opacity 0.5s ease;
+      }
+
+      .selector-content {
+        background: var(--parchment);
+        padding: 30px;
+        border-radius: 20px;
+        width: 85%;
+        max-width: 400px;
+        border: 3px solid var(--gold);
+      }
+
+      .selector-buttons {
+        display: flex;
+        flex-direction: column;
+        gap: 15px;
+        margin-top: 20px;
+      }
+
+      .selector-buttons button {
+        background: var(--medieval-blue);
+        color: white;
+        border: 2px solid var(--gold);
+        padding: 15px;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-family: "IM Fell English SC", serif;
+        cursor: pointer;
+        transition: transform 0.2s;
+      }
+
+      .selector-buttons button:active {
+        transform: scale(0.95);
+      }
+
+      .modal-action-btn {
+        background: var(--gold);
+        color: var(--medieval-blue);
+        border: 2px solid var(--medieval-blue);
+        padding: 12px;
+        border-radius: 10px;
+        font-size: 1rem;
+        font-weight: bold;
+        font-family: "IM Fell English SC", serif;
+        cursor: pointer;
+        transition: transform 0.2s;
+        width: 100%;
+        margin-top: 5px;
+      }
+
+      /* Animazione */
+      #menu-section {
+        padding: 15px;
+        margin-top: 10px;
+        margin-bottom: 15px;
+
+        line-height: 1.6;
+        color: #333;
+        background: rgba(218, 165, 32, 0.08); /* Il tuo sfondo pergamena/oro */
+        border: 2px solid var(--gold);
+        border-radius: 8px;
+      }
+
+      /* Schermi grandi */
+      @media (min-width: 1024px) {
+        .modal-content {
+          margin: 0;
+          position: absolute;
+          top: 50%;
+          left: 50%;
+          transform: translate(-50%, -50%);
+        }
+      }
+
+      #modal-image {
+        width: 100% !important;
+        height: auto !important;
+        display: block !important;
+        border: none !important;
+        margin: 0 !important;
+        padding: 0 !important;
+      }
+
+      #modal-image-container {
+        margin-bottom: 15px;
+        border: 3px solid var(--gold) !important;
+        border-radius: 12px;
+        padding: 0 !important;
+        margin-top: 5px;
+        overflow: hidden !important;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        box-sizing: border-box;
+      }
+
+      img#modal-img[src]:not([src=""]) {
+        border-radius: 8px;
+        box-shadow: 0 4px 8px rgba(0, 0, 0, 0.15);
+        outline: none;
+        border: none;
+      }
+
+      body.hide-controls .map-controls {
+        display: none !important;
+      }
+
+      /*.map-point {
+        position: absolute;
+        width: 40px;
+        height: 40px;
+        border-radius: 50%;
+        border: 2px solid red !important;
+        background-color: rgba(255, 0, 0, 0.3) !important;
+      }*/
+    </style>
+  </head>
+
+  <body>
+    <div id="map-selector" class="selector-overlay">
+      <div class="selector-content">
+        <h2>BENVENUTO A TEMPUS 2026</h2>
+        <p>Quale zona della festa vuoi esplorare?</p>
+        <div class="selector-buttons">
+          <button onclick="selectZone('garibaldi')">
+            ♟️Zona Piazza Garibaldi / Municipio
+          </button>
+          <button onclick="selectZone('duomo')">
+            ⛪ Zona Duomo / Campanile
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <div class="map-controls">
+      <button type="button" onclick="goToZone('garibaldi')">
+        ♟️Piazza Garibaldi
+      </button>
+      <button onclick="goToZone('duomo')">⛪ Duomo</button>
+    </div>
+
+    <button class="hamburger" onclick="toggleMenu()">
+      <span></span>
+      <span></span>
+      <span></span>
+    </button>
+
+    <div class="sidebar" id="sidebarMenu">
+      <div class="sheet-handle"></div>
+
+      <h2>I Luoghi della Festa</h2>
+
+      <h3>Locande e Ristori</h3>
+      <ul class="legend-list" id="Locande e Ristori">
+        <li
+          class="legend-item"
+          id="Duomo"
+          onclick="
+            showInfo(
+              '1️⃣Locanda de lo Duomo',
+              ' Situata sotto le volte del Duomo.',
+              '<b>MENU: </b><ul><li>Zuppa del Duomo - 7 monete</li><li>Arrosto del Campanile - 10 monete</li><li>Dolce del Clero - 5 monete</li></ul>',
+              'Duomo.jpg',
+            )
+          "
+        >
+          1️⃣Locanda de lo Duomo
+        </li>
+
+        <li
+          class="legend-item"
+          id="Taberna de lo rospo"
+          onclick="
+            showInfo(
+              '2️⃣Taberna de lo Rospo',
+              ' Osteria tipica per viandanti.',
+              '<b>MENU: </b><ul><li>Vino del Rospo - 3 monete</li><li>Birra del Borgo - 4 monete</li></ul>',
+              'Ospedaletto.jpg',
+            )
+          "
+        >
+          2️⃣ Taberna de lo Rospo
+        </li>
+
+        <li
+          class="legend-item"
+          id="Cervogeria"
+          onclick="
+            showInfo(
+              '3️⃣ Cervogeria Eretica Gemonense',
+              ' Birre artigianali in Vicolo del Bretone.',
+              '<b>MENU: </b><ul><li>Birra del Eretico - 3 monete</li><li>Vino del Bretone - 4 monete</li></ul>',
+              'Big.jpg',
+            )
+          "
+        >
+          3️⃣ Cervogeria Eretica Gemonense
+        </li>
+        <li
+          class="legend-item"
+          id="Taberna della Luna"
+          onclick="
+            showInfo(
+              '4️⃣Taberna de la Luna',
+              ' Osteria tipica per viandanti.',
+              '<b>MENU: </b><ul><li>Vino del Rospo - 3 monete</li><li>Birra del Borgo - 4 monete</li></ul>',
+              'ProLoco.jpg',
+            )
+          "
+        >
+          4️⃣ Taberna della Luna
+        </li>
+        <li
+          class="legend-item"
+          id="Porta Paninorum"
+          onclick="
+            showInfo(
+              '5️⃣Porta Paninorum',
+              ' Antico varco del borgo, oggi sede di sapori tradizionali.',
+              '<b> 🥪 Piatti tipici:</b><br>• Panino del Contadino - 5 monete<br>• Panino del Cavaliere - 7 monete<br>• Panino della Contessa - 9 monete',
+              'Cael Pizza Divina.jpg',
+            )
+          "
+        >
+          5️⃣ Porta Paninorum
+        </li>
+        <li
+          class="legend-item"
+          id="Taberna Pane e Salamen"
+          onclick="
+            showInfo(
+              '6️⃣ Taberna Pane et Salamen',
+              'Specialità locali, affettati e sapori del territorio.',
+              '<b>🍖 Piatti tipici:</b><br>• Pane e Salame dell\'oste - 4 monete',
+              'Pan e Salam.jpg',
+            )
+          "
+        >
+          6️⃣ Taberna Pane et Salamen
+        </li>
+      </ul>
+
+      <h3>Eventi e Spettacoli</h3>
+      <ul class="legend-list" id="Eventi">
+        <li
+          class="legend-item"
+          id="Incendio del Campanile"
+          onclick="
+            showInfo(
+              'Incendio del Campanile',
+              '⭐ Grande spettacolo pirotecnico serale che illumina il cielo del borgo. <p>Ogni sera, presso la Piazza del Duomo, in seguito al discorso dell\'araldo</p>',
+            )
+          "
+        >
+          ⭐ Incendio del Campanile
+        </li>
+
+        <li
+          class="legend-item"
+          id="Palio"
+          onclick="
+            showInfo(
+              'Palio del Niederlech',
+              '🏁 Venerdì 1: La storica sfida delle contrade per il primato.',
+            )
+          "
+        >
+          🏁 Palio del Niederlech
+        </li>
+
+        <li
+          class="legend-item"
+          id="Dama"
+          onclick="
+            showInfo(
+              'Dama Vivente',
+              '♟️ Lunedì 4: La suggestiva sfida a Dama Vivente in Piazza del Ferro.',
+            )
+          "
+        >
+          ♟️ Dama Vivente
+        </li>
+
+        <li
+          class="legend-item"
+          id="Accampamento"
+          onclick="
+            showInfo(
+              'Accampamento Medievale',
+              '⛺ Vita quotidiana, tende, armigeri e mestieri d\'altri tempi.',
+            )
+          "
+        >
+          ⛺ Accampamento
+        </li>
+
+        <li
+          class="legend-item"
+          id="Corteo"
+          onclick="
+            showInfo(
+              'Corteo Storico',
+              '🎭 Sfilata di figuranti in costume storico per le vie del borgo. <br>Ogni sera, con partenza presso Piazza Garibaldi alle 21:00',
+            )
+          "
+        >
+          🎭 Corteo Storico
+        </li>
+
+        <li
+          class="legend-item"
+          id="Vicolo delle Cartomanti"
+          onclick="
+            showInfo(
+              'Vicolo delle Cartomanti',
+              '🌙 Scopri il tuo destino tra stelle, tarocchi e mistero.',
+            )
+          "
+        >
+          🌙 Vicolo delle Cartomanti
+        </li>
+
+        <li
+          class="legend-item"
+          id="Cortile dei Nobili"
+          onclick="
+            showInfo(
+              'Cortile dei Nobili',
+              '👑 Area riservata e incontri dell\'aristocrazia del borgo.',
+            )
+          "
+        >
+          👑 Cortile dei Nobili
+        </li>
+
+        <li
+          class="legend-item"
+          id="Giochi Medievali"
+          onclick="
+            showInfo(
+              'Giochi Medievali',
+              '🎯 Sfide e divertimento per adulti e bambini presso la loggia del Municipio.',
+            )
+          "
+        >
+          🎯 Giochi Medievali - Loggia del Municipio
+        </li>
+
+        <li
+          class="legend-item"
+          id="Giochi Medievali"
+          onclick="
+            showInfo(
+              'Giochi Medievali',
+              '🎯 Sfide e divertimento per adulti e bambini.',
+            )
+          "
+        >
+          🎯 Giochi Medievali
+        </li>
+      </ul>
+
+      <h3>Servizi e Utilità</h3>
+      <ul class="legend-list" id="Servizi">
+        <li
+          class="legend-item"
+          id="Cambio Monete"
+          onclick="
+            showInfo(
+              'Cambio Monete',
+              '💰 Cambia qui i tuoi Euro nella moneta ufficiale della festa.',
+            )
+          "
+        >
+          💰 Cambio Monete
+        </li>
+
+        <li
+          class="legend-item"
+          id="Infopoint"
+          onclick="
+            showInfo(
+              'Infopoint / WC / Nursery',
+              'ℹ️ Informazioni generali, programmi e servizi igienici con fasciatoio.',
+            )
+          "
+        >
+          ℹ️ Infopoint / WC / Nursery
+        </li>
+
+        <li
+          class="legend-item"
+          id="Salvacondotto - via bini"
+          onclick="
+            showInfo(
+              'Salvacondotto - Via Bini',
+              '⚔️ Punto di controllo e accoglienza per i visitatori.',
+            )
+          "
+        >
+          ⚔️ Salvacondotto
+        </li>
+
+        <li
+          class="legend-item"
+          id="Salvacondotto - porta udine"
+          onclick="
+            showInfo(
+              'Salvacondotto - Porta Udine',
+              '⚔️ Punto di controllo e accoglienza per i visitatori.',
+            )
+          "
+        >
+          ⚔️ Salvacondotto
+        </li>
+
+        <li
+          class="legend-item"
+          id="Noleggio Coccio/Boccale - Piazza Duomo"
+          onclick="
+            showInfo(
+              'Noleggio Coccio/Boccale - Piazza Duomo',
+              'Punto dove noleggiare il caratteristico coccio o boccale della festa.',
+            )
+          "
+        >
+          Noleggio Coccio/Boccale - Piazza Duomo
+        </li>
+
+        <li
+          class="legend-item"
+          id="Noleggio Coccio/Boccale - Vicolo dei de Brugnis"
+          onclick="
+            showInfo(
+              'Noleggio Coccio/Boccale - Vicolo dei de Brugnis',
+              'Punto dove noleggiare il caratteristico coccio o boccale della festa.',
+            )
+          "
+        >
+          Noleggio Coccio/Boccale
+        </li>
+
+        <li
+          class="legend-item"
+          id="Bus Navetta"
+          onclick="
+            showInfo(
+              'Bus Navetta',
+              'Servizio di trasporto per visitatori e turisti dalla stazione FFSS di Gemona fino al centro storico (Porta Udine e ritorno)',
+              '<b>ORARI: </b><ul><li>Venerdì 31: 18:30 - 00:30</li><li>Sabato 1: 18:30 - 00:30</li><li>Domenica 2: 18:30 - 00:00♿</li><li>Lunedì 3: 18:30 - 23:30</li></ul>',
+            )
+          "
+        >
+          🚌 Bus Navetta
+        </li>
+      </ul>
+    </div>
+
+    <div class="map-viewport">
+      <div id="panzoom-element">
+        <img src="Interattiva Martino.png" id="map-image" />
+
+        <div
+          class="map-point"
+          id="locanda-duomo"
+          style="top: 50.5%; left: 71.4%"
+          onclick="
+            showInfo(
+              '1️⃣ Locanda de lo Duomo',
+              'Piazza del Duomo | Caffè al Duomo',
+              '<b>📜 MENU:</b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Acetaria Galli Rustici cum Holeribus et Cepa</b><br>Insalata di galletto ruspante con verdura e cipolla croccante<br><i> 1 Moneta d\'Oro + 3 d\'Argento | € 8,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Strozzapreti cum Iure Botuli et Ciceribus</b><br>Strozzapreti al ragù di salsiccia e ceci<br><i>1 Moneta d\'Oro + 4 d\'Argento | € 9,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Piattus de lo Domo</b><br>Polpette di manzo affogate al gorgonzola e pane croccante<br><i> 1 Moneta d\'Oro + 3 d\'Argento | € 8,00</i></li> <li style=\'margin-bottom: 10px;\'><b> Piattus Messeri Helii</b><br>Stufato di carni miste e fagioli preparato da messer Elio delle Contrade del Mare Nostro<br><i> 2 Monete d\'Oro | € 10,00</i></li></ul>',
+              'Duomo.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 69.6%; left: 67.6%"
+          id="taberna-rospo"
+          onclick="
+            showInfo(
+              '2️⃣ Taberna de lo Rospo',
+              'Piazzetta Candusso | Borgata di Ospedaletto',
+              '<b>📜 MENU:</b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Piatto de lo Rospo</b><br>Roastbeef con rucola e formaggio<br><i>2 Monete d\'Oro | € 10,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Porco in Pane</b><br>Crostino ripieno di salsiccia<br><i> 2 Monete d\'Argento + 1 di Bronzo | € 2,50</i></li> <li style=\'margin-bottom: 10px;\'><b>Pane Untum (Bruschetta)</b><br>Da scegliere con:<br>• <b>Aromatibus</b> (Olio aromatizzato)<br>• <b>Fungos</b> (Crema ai funghi)<br>• <b>Cynara</b> (Crema di carciofi)<br>• <b>Thunno et oleis</b> (Crema di tonno e olive)<br>• <b>Vitellus assus et caseus</b> (Roastbeef e formaggio)<br><i>2 Monete d\'Argento | € 2,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Piattus Plenus</b><br>Piatto di bruschette miste<br><i> 1 Moneta d\'Oro + 1 d\'Argento | € 6,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Piadina</b><br>Da scegliere con:<br>• <b>Porco</b> (Salsiccia e cipolla)<br>• <b>Olus</b> (Melanzane grigliate, formaggio e rucola)<br>• <b>Caseus et Perna</b> (Speck e formaggio spalmabile)<br><i> 1 Moneta d\'Oro + 1 d\'Argento | € 6,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Dulze de lo Rospo cum Melle et Nocibus</b><br>Torta di noci e miele<br><i> 3 Monete d\'Argento | € 3,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Crustula de lo Bosco cum Avellanis</b><br>Cantucci con nocciole<br><i> 3 Monete d\'Argento | € 3,00</i></li> </ul>',
+              'Ospedaletto.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 63%; left: 60.25%"
+          id="cervogeria"
+          onclick="
+            showInfo(
+              '3️⃣Cervogeria Eretica Gemonense',
+              ' Corte degli Archi | Birrificio Indipendente Gemonese',
+              '<b>📜 MENU: </b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Salsus insiciae cum verzini</b><br>Salsicce cotte nella birra con capuccio<br><i> 1 Moneta d\'Oro + 4 d\'Argento | € 9,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Phaselous con porco</b><br>Fagiolata con pancetta<br><i> 1 Moneta d\'Oro + 4 d\'Argento | € 9,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Carnae porci siccs</b><br>Carne secca<br><i> 2 Monete d\'Argento | € 2,00</i></li><li style=\'margin-bottom: 10px;\'><b>Tartinae cum porzina</b><br>Tartina con porchetta e kren<br><i> 4 Monete d\'Argento | € 4,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Tartinae cum cicer saraceni</b><br>Tartina con hummus<br><i> 3 Monete d\'Argento | € 3,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Tartinae cum caseus asìni</b><br>Tartina con formaggio asìno<br><i> 3 Monete d\'Argento | € 3,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Tartinae cum babaganous</b><br>Tartina con crema di melanzane<br><i> 3 Monete d\'Argento | € 3,00</i></li></ul>',
+              'Big.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 56%; left: 56.2%"
+          id="taberna-luna"
+          onclick="
+            showInfo(
+              '4️⃣Taberna de la Luna',
+              'Piazzetta Portuzza | Pro Loco Pro Glemona',
+              '<b>📜 MENU: </b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Panem cum olivae</b><br>Crostini di pane alle olive<br><i> 1 Moneta d\'Argento | € 1,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Offula de ciceribus</b><br>Bocconcini di ceci al forno<br><i> 4 Monete d\'Argento | € 4,00</i></li> <li style\'margin-bottom: 10 px;\'><b>Elisir</b><br>Amari e liquori a scelta<br><i> 2 Monete d\'Argento + 1 di Bronzo | € 2,50</i></li> <li style\'margin-bottom: 10px;\'><b>Cervogia sine spiga</b><br>Birra senza glutine 0.33L (in boccale)<br><i> 4 Monete d\'Argento | € 4,00</i></li> <li style\'margin-bottom: 10px;\'><b>Cervogia sine spiritum</b><br>Birra zero alcool 0.5L (in boccale)<br><i> 4 Monete d\'Argento + 1 di Bronzo | € 4,50</i></li></ul>',
+              'ProLoco.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 39%; left: 44.5%"
+          id="porta-paninorum"
+          onclick="
+            showInfo(
+              '5️⃣Porta Paninorum',
+              'Corte di Palazzo Elti | La Bottega di Cael e Pizza Divina',
+              '<b>📜 MENU: </b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Sus scrofa domesticus</b><br>Panino con porchetta, salsa ai peperoni e cipolla agrodolce<br><i> 2 Monete d\'Oro | € 10,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Solanum melongena</b><br>Panino con melanzane, rucola e stracciatella<br><i> 2 Monete d\'Oro | € 10,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Cicciolus</b><br>Panino con ragù, fagioli e panna acida<br><i> 2 Monete d\'Oro | € 10,00</i></li></ul>',
+              'Cael Pizza Divina.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 43.7%; left: 39.5%"
+          id="taberna-pane-salamen"
+          onclick="
+            showInfo(
+              '6️⃣Taberna Pane et Salamen',
+              'Via Bini | Osteria Pan & Salam',
+              '<b>📜 MENU: </b><ul style=\'padding-left: 15px;\'> <li style=\'margin-bottom: 10px;\'><b>Mangiafuoco</b><br>Panino con pulled pork e insalata coleslaw<br><i> 2 Monete d\'Oro | € 10,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Giullare di corte</b><br>Panino con roastbeef all\'inglese cotto al BBQ, verdure croccanti e salsa al cren<br><i> 2 Monete d\'Oro | € 10,00</i></li> <li style=\'margin-bottom: 10px;\'><b>Dama</b><br>Panino con stracciatella di burrata, cipolla rosssa in agrodolce e rucola<br><i> 2 Monete d\'Oro | € 10,00</i></li></ul>',
+              'Pan e Salam.jpg',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 43.75%; left: 75.15%"
+          id="incendio-campanile"
+          onclick="
+            showInfo(
+              'Incendio del Campanile',
+              'Grande spettacolo pirotecnico serale che illumina il cielo del centro storico. <br>Ogni sera, presso la Piazza del Duomo, alle 21:00',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 77.25%; left: 32%"
+          id="piazza-del-ferro"
+          onclick="
+            showInfo(
+              'Piazza del Ferro',
+              'Palio del Niederlech, la caratteristica disfida fra le borgate di Gemona',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 44%; left: 49.25%"
+          id="infopoint"
+          onclick="showInfo('Infopoint', 'Informazioni e WC con fasciatoio.')"
+        ></div>
+        <div
+          class="map-point"
+          style="top: 57.75%; left: 44.1%"
+          id="accampamento"
+          onclick="showInfo('Accampamento', 'Tende e addestramento armigeri.')"
+        ></div>
+        <div
+          class="map-point"
+          style="top: 36%; left: 35.2%"
+          id="giochi-medievali-frankie"
+          onclick="
+            showInfo(
+              'Giochi Medievali',
+              'Sfide e divertimento per adulti e bambini presso la loggia del Municipio.',
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 62.7%; left: 67.7%"
+          id="giochi-medievali"
+          onclick="
+            showInfo(
+              'Giochi Medievali',
+              'Sfide e divertimento per adulti e bambini.',
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 54%; left: 65.75%"
+          id="vicolo-cartomanti"
+          onclick="
+            showInfo(
+              'Vicolo delle Cartomanti',
+              'Scopri il tuo destino tra stelle e tarocchi affidandoti al sapere delle cartomanti.',
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 60.75%; left: 70%"
+          id="nobili"
+          onclick="
+            showInfo(
+              'Cortile dei Nobili',
+              'Area riservata e incontri dell\'aristocrazia del borgo.',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 42.75%; left: 41.65%"
+          id="salvacondotto - via bini"
+          onclick="
+            showInfo(
+              'Salvacondotto - Via Bini',
+              'Punto di controllo e accoglienza per i visitatori.',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 45.2%; left: 90%"
+          id="salvacondotto - porta udine"
+          onclick="
+            showInfo(
+              'Salvacondotto - Porta Udine',
+              'Punto di controllo e accoglienza per i visitatori.',
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 45.2%; left: 51.3%"
+          id="cambio-monete"
+          onclick="
+            showInfo(
+              'Cambio monete',
+              'Punto dove cambiare gli Euro in moneta ufficiale della festa.',
+              cambioMonete,
+            )
+          "
+        ></div>
+        <div
+          class="map-point"
+          style="top: 47.25%; left: 82.85%"
+          id="noleggio-duomo"
+          onclick="
+            showInfo(
+              'Banco dei cocci - Piazza del Duomo',
+              'Punto dove noleggiare il caratteristico coccio/boccale della festa.',
+              BancoCocci,
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 59.4%; left: 63%"
+          id="noleggio-de brugnis"
+          onclick="
+            showInfo(
+              'Banco dei cocci - Vicolo dei de Brugnis',
+              'Punto dove noleggiare il caratteristico coccio/boccale della festa.',
+              BancoCocci,
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 39.25%; left: 95.45%"
+          id="bus-navetta"
+          onclick="
+            showInfo(
+              'Bus Navetta',
+              'Servizio di trasporto per visitatori e turisti dalla stazione FFSS di Gemona fino al centro storico (Porta Udine e ritorno)',
+              '<b>ORARI: </b><ul><li>Venerdì 31: 18:30 - 00:30</li><li>Sabato 1: 18:30 - 00:30</li><li>Domenica 2: 18:30 - 00:00♿</li><li>Lunedì 3: 18:30 - 23:30</li></ul>',
+              '',
+              '',
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 7.5%; left: 9.6%"
+          id="dama"
+          onclick="
+            showInfo(
+              'Dama Vivente',
+              'Lunedì 3: La suggestiva disfida a Dama Vivente fra le prime due borgate classificate al Palio, presso Piazza Garibaldi.',
+            )
+          "
+        ></div>
+
+        <div
+          class="map-point"
+          style="top: 15.15%; left: 17.95%"
+          id="corteo"
+          onclick="
+            showInfo(
+              'Corteo Storico',
+              'Sfilata di figuranti in costume medievale per le vie del borgo. <br>Ogni sera, con partenza presso Piazza Garibaldi alle 21:00',
+            )
+          "
+        ></div>
+      </div>
+    </div>
+
+    <div id="infoModal" class="modal">
+      <div
+        class="modal-content"
+        style="max-width: 400px; display: flex; flex-direction: column"
+      >
+        <span class="close" onclick="closeModal()">&times;</span>
+
+        <div
+          id="modal-image-container"
+          style="margin-bottom: 15px; display: none"
+        >
+          <img id="modal-img" src="" alt="" style="width: 100%; height: auto" />
+        </div>
+
+        <div class="scroll-box">
+          <h2
+            id="modal-title"
+            style="
+              color: var(--medieval-blue);
+              margin-top: 0;
+              margin-bottom: 15px;
+              border-bottom: 2px solid var(--gold);
+              padding-bottom: 8px;
+            "
+          ></h2>
+
+          <div
+            id="modal-text"
+            style="line-height: 1.6; color: #333; margin-bottom: 15px"
+          ></div>
+
+          <div id="menu-section"></div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      const elem = document.getElementById("panzoom-element");
+      const img = document.getElementById("map-image");
+
+      const panzoom = Panzoom(elem, {
+        maxScale: 4,
+        minScale: 0.3,
+        contain: "outside",
+        cursor: "grab",
+        duration: 800,
+        easing: "cubic-bezier(0.45, 0, 0.55, 1)",
+      });
+
+      elem.parentElement.addEventListener("wheel", panzoom.zoomWithWheel);
+
+      function initMap() {
+        const windowHeight = window.innerHeight;
+        const targetScale = windowHeight / 1080;
+        panzoom.zoom(targetScale, { animate: false });
+      }
+
+      if (img.complete) {
+        initMap();
+      } else {
+        img.onload = initMap;
+      }
+
+      //Toggle per il Bottom Sheet
+      function toggleMenu() {
+        const sidebar = document.getElementById("sidebarMenu");
+        sidebar.classList.toggle("active");
+      }
+
+      function goToZone(zone) {
+        const isPC = window.innerWidth > 768;
+        const slowOptions = { animate: true, duration: 750 };
+
+        console.log("🚀 goToZone CHIAMATA! Zona:", zone);
+
+        let zoomLevel, panX, panY;
+
+        if (zone === "garibaldi") {
+          zoomLevel = isPC ? 1.25 : 0.65;
+          panX = isPC ? -80 : -350;
+          panY = isPC ? -5 : -80;
+        } else if (zone === "duomo") {
+          zoomLevel = isPC ? 1.25 : 0.65;
+          panX = isPC ? -1000 : -1500;
+          panY = isPC ? 0 : -120;
+        }
+
+        panzoom.zoom(zoomLevel, slowOptions);
+
+        setTimeout(() => {
+          console.log("✈️ Avvio lo spostamento reale verso X:", panX);
+          panzoom.pan(panX, panY, slowOptions);
+        }, 150);
+      }
+
+      function selectZone(zone) {
+        const selector = document.getElementById("map-selector");
+        if (selector) {
+          selector.style.opacity = "0";
+          setTimeout(() => {
+            selector.style.display = "none";
+          }, 500);
+        }
+
+        const controls = document.querySelector(".map-controls");
+        if (controls) {
+          controls.style.display = "flex";
+          controls.style.opacity = "0";
+          controls.style.transition = "opacity 0.5s ease";
+          setTimeout(() => (controls.style.opacity = "1"), 10);
+        }
+
+        // 🎯 IL CONTROLLO BLINDATO:
+        if (zone === "garibaldi" || zone === "sinistra") {
+          goToZone("garibaldi");
+        } else if (zone === "duomo" || zone === "destra") {
+          goToZone("duomo");
+        }
+      }
+
+      function apriDaLegenda(title, description, menu, imageSrc, x, y) {
+        // 1. Sposta e zooma la mappa (x e y, con zoom a 1.2 per i PC o 0.8 per i cellulari)
+        const isPC = window.innerWidth > 768;
+        const zoom = isPC ? 1.2 : 0.8;
+        inquadraPunto(x, y, zoom);
+
+        // 2. Chiude automaticamente la tendina della legenda
+        document.getElementById("sidebarMenu").classList.remove("active");
+
+        // 3. Aspetta mezzo secondo che la mappa si sposti, poi apre il popup
+        setTimeout(() => {
+          showInfo(title, description, menu, imageSrc);
+        }, 600);
+      }
+
+      function inquadraPunto(percentualeX, percentualeY, livelloZoom) {
+        const slowOptions = { animate: true, duration: 800, force: true };
+
+        // 1. Calcola la posizione in pixel sull'immagine originale
+        const pixelX = 1920 * (percentualeX / 100);
+        const pixelY = 1080 * (percentualeY / 100);
+
+        // 2. Calcola lo spostamento (pan) necessario per centrarlo nello schermo
+        const panX = window.innerWidth / 2 - pixelX * livelloZoom;
+        const panY = window.innerHeight / 2 - pixelY * livelloZoom;
+
+        // 3. Applica zoom e pan
+        panzoom.zoom(livelloZoom, slowOptions);
+        panzoom.pan(panX, panY, slowOptions);
+      }
+
+      // Questo stamperà in console la X e la Y ogni volta che trascini la mappa
+      elem.addEventListener("panzoompan", (e) => {
+        console.log(
+          "X:",
+          Math.round(e.detail.x),
+          " Y:",
+          Math.round(e.detail.y),
+        );
+      });
+
+      function showInfo(title, description, menu, imageSrc) {
+        // 1. INSERISCE I TESTI BASE
+        document.getElementById("modal-title").innerHTML = title || "";
+        document.getElementById("modal-text").innerHTML = description || "";
+
+        // 2. GESTISCE IL MENÙ
+        const menuSection = document.getElementById("menu-section");
+        if (menu && typeof menu === "string" && menu.trim() !== "") {
+          menuSection.innerHTML = menu;
+          menuSection.style.display = "block";
+        } else {
+          menuSection.innerHTML = "";
+          menuSection.style.display = "none";
+        }
+
+        // 3. GESTISCE L'IMMAGINE
+        const imageContainer = document.getElementById("modal-image-container");
+        const imageElement = document.getElementById("modal-img");
+
+        if (
+          imageSrc &&
+          typeof imageSrc === "string" &&
+          imageSrc.trim() !== ""
+        ) {
+          imageElement.src = imageSrc;
+          imageElement.style.display = "block";
+          imageContainer.style.display = "block";
+        } else {
+          imageElement.removeAttribute("src");
+          imageElement.style.display = "none";
+          imageContainer.style.display = "none";
+        }
+
+        // 4. APRE IL POPUP
+        document.getElementById("infoModal").style.display = "flex";
+
+        // 5. CHIUDE LA LEGENDA (La novità!)
+        const sidebar = document.getElementById("sidebarMenu");
+        if (sidebar) {
+          sidebar.classList.remove("active");
+        }
+      }
+
+      function closeModal() {
+        document.getElementById("infoModal").style.display = "none";
+      }
+
+      window.onclick = function (event) {
+        // 1. CHIUSURA DELLA MODALE
+        const infoModal = document.getElementById("infoModal");
+        if (event.target === infoModal) {
+          closeModal();
+        }
+
+        // 2. CHIUSURA DELLA LEGENDA
+        const sidebar = document.getElementById("sidebarMenu");
+
+        if (sidebar && sidebar.classList.contains("active")) {
+          const clickedInsideSidebar = event.target.closest("#sidebarMenu");
+
+          const clickedOnButton = event.target.closest(".hamburger");
+
+          if (!clickedInsideSidebar && !clickedOnButton) {
+            sidebar.classList.remove("active");
+          }
+        }
+      };
+
+      const BancoCocci = `
+  <h4 style="margin-top: 0; margin-bottom: 10px; color: var(--medieval-blue);">Cauzioni <u>(In contanti)</u>:</h4>
+  
+  <table style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 15px;">
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Coccio</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);">€ 3,00</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Boccale</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);">€ 5,00</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Caraffa</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);">€ 10,00</td>
+    </tr>
+  </table>
+
+  <h4 style="margin-top: 15px; margin-bottom: 5px; color: var(--medieval-blue);">Orari di Apertura</h4>
+  <p style="margin: 0; padding-left: 5px; border-left: 3px solid var(--gold); line-height: 1.6;">
+    <b>Venerdì e Sabato:</b> 18:00 - 01:15<br>
+    <b>Domenica e Lunedì:</b> 18:00 - 00:30
+  </p>
+`;
+
+      const cambioMonete = `
+<h4 style="margin-top: 0; margin-bottom: 10px; color: var(--medieval-blue);">Cambio monete:</h4>
+  
+  <table style="width: 100%; border-collapse: collapse; text-align: left; margin-bottom: 15px;">
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Moneta d'oro</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"> 1 = € 5,00</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Moneta d'argento</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"> 1 = € 1,00</td>
+    </tr>
+    <tr>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"><b>Moneta di bronzo</b></td>
+      <td style="padding: 8px; border-bottom: 1px solid var(--gold);"> 1 = € 0,50</td>
+    </tr>
+  </table>
+
+  <h4 style="margin-top: 15px; margin-bottom: 5px; color: var(--medieval-blue);">Orari di Apertura</h4>
+  <p style="margin: 0; padding-left: 5px; border-left: 3px solid var(--gold); line-height: 1.6;">
+    <b>Venerdì e Sabato:</b> 18:00 - 00:30<br>
+    <b>Domenica e Lunedì:</b> 18:00 - 00:00
+  </p>
+`;
+    </script>
+  </body>
+</html>
